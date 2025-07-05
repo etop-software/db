@@ -1,0 +1,125 @@
+# SSH into the server
+ssh root@195.35.20.93
+
+# Enter the password when prompted
+# Password: eTOP@12345678
+
+# Create directory for the project
+mkdir /var/www/MODON
+
+# Clone the CrewSync repository into the project directory
+git clone git@github.com:etop-software/CrewSync.git /var/www/MODON
+
+# Edit frontend environment variables
+sudo nano /var/www/MODON/UI/ui/.env
+
+# Add the following inside .env
+VITE_API_URL=http://195.35.20.93:5040
+
+# Navigate to frontend directory
+cd /var/www/MODON
+cd /var/www/MODON/UI/ui
+
+# Install frontend dependencies
+npm install
+
+# Build the frontend
+npm run build
+
+# Edit backend environment variables
+sudo nano /var/www/MODON/backend-app/.env
+
+# Add the following inside .env
+PORT=5042
+PGHOST=localhost
+PGUSER=postgres
+PGPASSWORD=eTOP@123
+PGDATABASE=MODONDB
+PGPORT=5432
+
+# Navigate to backend app
+cd /var/www/MODON/backend-app
+
+# Install backend dependencies
+npm install
+
+# Configure Nginx for frontend
+cd /etc/nginx/sites-available
+sudo nano /etc/nginx/sites-available/MODONClient
+
+# Paste the following config for frontend
+server {
+    listen 5041;  # Serve frontend on port 5041
+    server_name 195.35.20.93;
+
+    root /var/www/MODON/UI/ui/dist;  # Built files location
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+        expires max;
+        add_header Cache-Control "public, no-transform";
+    }
+}
+
+# Enable the frontend config
+sudo ln -s /etc/nginx/sites-available/MODONClient /etc/nginx/sites-enabled/
+
+# Configure Nginx for backend API
+sudo nano /etc/nginx/sites-available/MODONServer
+
+# Paste the following config for backend
+server {
+    listen 7080;  # Serve API on port 7080
+    server_name 195.35.20.93;
+
+    location /api/ {
+        proxy_pass http://localhost:7082;  # Update if backend port changes
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    error_page 404 /404.html;
+    error_page 500 502 503 504 /50x.html;
+
+    location = /50x.html {
+        root /usr/share/nginx/html;
+    }
+}
+
+# Enable the backend config
+sudo ln -s /etc/nginx/sites-available/MODONServer /etc/nginx/sites-enabled/
+
+# Allow necessary ports through the firewall
+sudo ufw allow 5040
+sudo ufw allow 5041
+sudo ufw allow 5042
+
+# Check Nginx status to ensure it's running
+sudo systemctl status nginx
+
+# Start the backend application using PM2
+cd /var/www/MODON/backend-app/src
+pm2 start index.js  # Make sure index.js is your entry point
+
+# Save the PM2 process list
+pm2 save
+
+# Update project files from the main branch
+cd /var/www/MODON
+git pull origin main
+
+# Rebuild the frontend after pulling latest changes
+cd /var/www/MODON/UI/ui
+npm install
+npm run build
+
+# Reinstall backend dependencies just in case there are updates
+cd /var/www/MODON/backend-app
+npm install
