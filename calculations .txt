@@ -1,0 +1,27 @@
+CASE 
+  WHEN s."SHIFT" NOT IN ('HOLIDAY', 'WEEKLY OFF') AND COUNT(a.datetime) > 1 THEN
+    CASE 
+      WHEN (
+        EXTRACT(EPOCH FROM MAX(a.datetime) - MIN(a.datetime))
+        - (CASE WHEN sh.break_time_applied THEN COALESCE(sh.break_time, 0) * 60 ELSE 0 END)
+      ) > (
+        EXTRACT(EPOCH FROM s."OUTPUNCH" - s."INPUNCH")
+      )
+      THEN
+        -- Compute Regular OT
+        LPAD(FLOOR((
+          EXTRACT(EPOCH FROM MAX(a.datetime) - MIN(a.datetime))
+          - (CASE WHEN sh.break_time_applied THEN COALESCE(sh.break_time, 0) * 60 ELSE 0 END)
+          - EXTRACT(EPOCH FROM s."OUTPUNCH" - s."INPUNCH")
+        ) / 3600)::TEXT, 2, '0') || ':' ||
+        LPAD(FLOOR((
+          (
+            EXTRACT(EPOCH FROM MAX(a.datetime) - MIN(a.datetime))
+            - (CASE WHEN sh.break_time_applied THEN COALESCE(sh.break_time, 0) * 60 ELSE 0 END)
+            - EXTRACT(EPOCH FROM s."OUTPUNCH" - s."INPUNCH")
+          ) % 3600
+        ) / 60)::TEXT, 2, '0')
+      ELSE '00:00'
+    END
+  ELSE '00:00'
+END AS regular_ot
